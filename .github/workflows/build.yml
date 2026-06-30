@@ -1,0 +1,92 @@
+# Automatically build the project and run any configured tests for every push,
+# pull request, or manual trigger. When pushing to main or manually triggering,
+# it will automatically calculate the next version tag (e.g. v0.1 -> v0.2 ... -> v0.11),
+# push the tag to Git, and create a GitHub Release with the compiled .jar files.
+
+name: build
+
+on:
+  push:
+    branches:
+      - 'main'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: validate gradle wrapper
+        uses: gradle/actions/wrapper-validation@v6
+
+      - name: setup jdk
+        uses: actions/setup-java@v5
+        with:
+          java-version: '25'
+          distribution: 'microsoft'
+
+      - name: make gradle wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: determine next tag
+        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+        run: |
+          LATEST_TAG=$(git tag -l "v*" | sort -V | tail -n1)
+          echo "Latest tag: $LATEST_TAG"
+          if [ -z "$LATEST_TAG" ]; then
+            NEW_TAG="v0.1"
+          else
+            VERSION=${LATEST_TAG#v}
+            if [[ "$VERSION" =~ ^([0-9]+)\.([0-9]+)$ ]]; then
+              MAJOR="${BASH_REMATCH[1]}"
+              MINOR="${BASH_REMATCH[2]}"
+              NEW_MINOR=$((MINOR + 1))
+              NEW_TAG="v${MAJOR}.${NEW_MINOR}"
+            else
+              NEW_TAG="v0.1"
+            fi
+          fi
+          echo "New tag calculated: $NEW_TAG"
+          echo "NEW_TAG=$NEW_TAG" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=${NEW_TAG#v}" >> $GITHUB_ENV
+
+      - name: build
+        run: |
+          if [ -n "${{ env.RELEASE_VERSION }}" ]; then
+            echo "Building with release version: ${{ env.RELEASE_VERSION }}"
+            ./gradlew build -Pmod_version=${{ env.RELEASE_VERSION }}
+          else
+            echo "Building with default version"
+            ./gradlew build
+          fi
+
+      - name: capture build artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: Artifacts
+          path: build/libs/
+
+      - name: create and push tag
+        if: env.NEW_TAG != ''
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git tag ${{ env.NEW_TAG }}
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git ${{ env.NEW_TAG }}
+
+      - name: create github release
+        uses: softprops/action-gh-release@v2
+        if: env.NEW_TAG != ''
+        with:
+          tag_name: ${{ env.NEW_TAG }}
+          files: build/libs/*.jar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

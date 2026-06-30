@@ -1,0 +1,38 @@
+{
+	"schemaVersion": 1,
+	"id": "shole",
+	"version": "${version}",
+	"name": "Shole",
+	"description": "Shole Sholy",
+	"authors": [
+		"Shole"
+	],
+	"contact": {
+		"homepage": "https://fabricmc.net/"
+	},
+	"license": "CC0-1.0",
+	"icon": "assets/shole/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"com.shole.Shole"
+		],
+		"client": [
+			"com.shole.SholeClient"
+		]
+	},
+	"depends": {
+		"fabricloader": ">=0.19.3",
+		"minecraft": "~26.1",
+		"java": ">=25",
+		"fabric-api": "*"
+	},
+	"custom": {
+		"modmenu": {
+			"badge": "library",
+			"links": {},
+			"parent": null,
+			"update_checker": false
+		}
+	}
+}
