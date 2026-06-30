@@ -37,32 +37,91 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: determine next tag
-        if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+        if: github.ref == 'refs/heads/main'
         run: |
-          LATEST_TAG=$(git tag -l "v*" | sort -V | tail -n1)
-          echo "Latest tag: $LATEST_TAG"
-          if [ -z "$LATEST_TAG" ]; then
-            NEW_TAG="v0.1"
+          # 1. Ensure git has all remote tags and is unshallowed if necessary
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+            echo "Shallow repository detected. Unshallowing..."
+            git fetch --unshallow --tags --force
           else
-            VERSION=${LATEST_TAG#v}
-            if [[ "$VERSION" =~ ^([0-9]+)\.([0-9]+)$ ]]; then
-              MAJOR="${BASH_REMATCH[1]}"
-              MINOR="${BASH_REMATCH[2]}"
-              NEW_MINOR=$((MINOR + 1))
-              NEW_TAG="v${MAJOR}.${NEW_MINOR}"
+            echo "Fetching all remote tags..."
+            git fetch --tags --force
+          fi
+
+          # 2. Get the latest tag matching 'v*' or standard version formats
+          LATEST_TAG=$(git tag -l "v*" -l "[0-9]*" | sort -V | tail -n1)
+          echo "Latest tag: $LATEST_TAG"
+
+          # 3. Read properties version as the fallback / minimum version
+          PROPERTIES_VERSION=""
+          if [ -f "gradle.properties" ]; then
+            PROPERTIES_VERSION=$(grep '^mod_version[[:space:]]*=' gradle.properties | cut -d= -f2 | tr -d '[:space:]' | tr -d '\r')
+          fi
+          if [ -z "$PROPERTIES_VERSION" ]; then
+            PROPERTIES_VERSION="0.1.0"
+          fi
+          echo "Version in gradle.properties: $PROPERTIES_VERSION"
+
+          # 4. Helper function to increment version (supports X.Y.Z, X.Y, X)
+          increment_version() {
+            local version="$1"
+            if [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              local major="${BASH_REMATCH[1]}"
+              local minor="${BASH_REMATCH[2]}"
+              local patch="${BASH_REMATCH[3]}"
+              echo "${major}.${minor}.$((patch + 1))"
+            elif [[ "$version" =~ ^([0-9]+)\.([0-9]+)$ ]]; then
+              local major="${BASH_REMATCH[1]}"
+              local minor="${BASH_REMATCH[2]}"
+              echo "${major}.$((minor + 1))"
+            elif [[ "$version" =~ ^([0-9]+)$ ]]; then
+              local major="${BASH_REMATCH[1]}"
+              echo "$((major + 1))"
             else
-              NEW_TAG="v0.1"
+              echo "${version}.1"
+            fi
+          }
+
+          # Helper to check if version1 > version2
+          version_gt() {
+            [ "$1" = "$2" ] && return 1
+            local winner
+            winner=$(echo -e "$1\n$2" | sort -V | tail -n1)
+            [ "$winner" = "$1" ]
+          }
+
+          # 5. Calculate base next version
+          if [ -z "$LATEST_TAG" ]; then
+            # No previous tag exists, use gradle.properties version
+            NEW_VERSION="$PROPERTIES_VERSION"
+          else
+            VERSION_STR=${LATEST_TAG#v}
+            if version_gt "$PROPERTIES_VERSION" "$VERSION_STR"; then
+              # If version in gradle.properties was bumped manually, use it
+              NEW_VERSION="$PROPERTIES_VERSION"
+            else
+              # Otherwise, increment the latest tag
+              NEW_VERSION=$(increment_version "$VERSION_STR")
             fi
           fi
-          echo "New tag calculated: $NEW_TAG"
+
+          # 6. Ensure the tag does not exist locally or on remote
+          NEW_TAG="v$NEW_VERSION"
+          while git rev-parse -q --verify "refs/tags/$NEW_TAG" >/dev/null || { git ls-remote --tags origin "refs/tags/$NEW_TAG" 2>/dev/null | grep -q "$NEW_TAG"; }; do
+            echo "Tag $NEW_TAG already exists, incrementing..."
+            NEW_VERSION=$(increment_version "$NEW_VERSION")
+            NEW_TAG="v$NEW_VERSION"
+          done
+
+          echo "Calculated Tag: $NEW_TAG"
           echo "NEW_TAG=$NEW_TAG" >> $GITHUB_ENV
-          echo "RELEASE_VERSION=${NEW_TAG#v}" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=$NEW_VERSION" >> $GITHUB_ENV
 
       - name: build
         run: |
-          if [ -n "${{ env.RELEASE_VERSION }}" ]; then
-            echo "Building with release version: ${{ env.RELEASE_VERSION }}"
-            ./gradlew build -Pmod_version=${{ env.RELEASE_VERSION }}
+          if [ -n "$RELEASE_VERSION" ]; then
+            echo "Building with release version: $RELEASE_VERSION"
+            ./gradlew build -Pmod_version="$RELEASE_VERSION"
           else
             echo "Building with default version"
             ./gradlew build
@@ -79,8 +138,8 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git tag ${{ env.NEW_TAG }}
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git ${{ env.NEW_TAG }}
+          git tag "$NEW_TAG"
+          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git "$NEW_TAG"
 
       - name: create github release
         uses: softprops/action-gh-release@v2
