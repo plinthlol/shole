@@ -1,151 +1,99 @@
-# Automatically build the project and run any configured tests for every push,
-# pull request, or manual trigger. When pushing to main or manually triggering,
-# it will automatically calculate the next version tag (e.g. v0.1 -> v0.2 ... -> v0.11),
-# push the tag to Git, and create a GitHub Release with the compiled .jar files.
-
-name: build
+name: Build and Release Mod
 
 on:
   push:
     branches:
       - '26.1'
-  pull_request:
-  workflow_dispatch:
+  workflow_dispatch: # Allows manual trigger from the Actions tab
 
 permissions:
   contents: write
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
+
     steps:
-      - name: checkout repository
-        uses: actions/checkout@v6
+      - name: Checkout Repository
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: validate gradle wrapper
-        uses: gradle/actions/wrapper-validation@v6
-
-      - name: setup jdk
-        uses: actions/setup-java@v5
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
         with:
           java-version: '25'
-          distribution: 'microsoft'
+          distribution: 'temurin'
 
-      - name: make gradle wrapper executable
-        run: chmod +x ./gradlew
-
-      - name: determine next tag
-        if: github.ref == 'refs/heads/26.1'
+      - name: Determine Next Version
+        id: get_version
         run: |
-          # 1. Ensure git has all remote tags and is unshallowed if necessary
-          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
-            echo "Shallow repository detected. Unshallowing..."
-            git fetch --unshallow --tags --force
-          else
-            echo "Fetching all remote tags..."
-            git fetch --tags --force
-          fi
-
-          # 2. Get the latest tag matching 'v*' or standard version formats
-          LATEST_TAG=$(git tag -l "v*" -l "[0-9]*" | sort -V | tail -n1)
-          echo "Latest tag: $LATEST_TAG"
-
-          # 3. Read properties version as the fallback / minimum version
-          PROPERTIES_VERSION=""
-          if [ -f "gradle.properties" ]; then
-            PROPERTIES_VERSION=$(grep '^mod_version[[:space:]]*=' gradle.properties | cut -d= -f2 | tr -d '[:space:]' | tr -d '\r')
-          fi
-          if [ -z "$PROPERTIES_VERSION" ]; then
-            PROPERTIES_VERSION="0.1.0"
-          fi
-          echo "Version in gradle.properties: $PROPERTIES_VERSION"
-
-          # 4. Helper function to increment version (supports X.Y.Z, X.Y, X)
-          increment_version() {
-            local version="$1"
-            if [[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-              local major="${BASH_REMATCH[1]}"
-              local minor="${BASH_REMATCH[2]}"
-              local patch="${BASH_REMATCH[3]}"
-              echo "${major}.${minor}.$((patch + 1))"
-            elif [[ "$version" =~ ^([0-9]+)\.([0-9]+)$ ]]; then
-              local major="${BASH_REMATCH[1]}"
-              local minor="${BASH_REMATCH[2]}"
-              echo "${major}.$((minor + 1))"
-            elif [[ "$version" =~ ^([0-9]+)$ ]]; then
-              local major="${BASH_REMATCH[1]}"
-              echo "$((major + 1))"
-            else
-              echo "${version}.1"
-            fi
-          }
-
-          # Helper to check if version1 > version2
-          version_gt() {
-            [ "$1" = "$2" ] && return 1
-            local winner
-            winner=$(echo -e "$1\n$2" | sort -V | tail -n1)
-            [ "$winner" = "$1" ]
-          }
-
-          # 5. Calculate base next version
+          # Fetch all tags
+          git fetch --tags --force
+          
+          # Find the latest version tag starting with 'v' followed by a number
+          LATEST_TAG=$(git tag -l "v*" --sort=-v:refname | grep -E '^v[0-9]+$' | head -n 1 || true)
+          
           if [ -z "$LATEST_TAG" ]; then
-            # No previous tag exists, use gradle.properties version
-            NEW_VERSION="$PROPERTIES_VERSION"
+            VERSION_NUM=1
           else
-            VERSION_STR=${LATEST_TAG#v}
-            if version_gt "$PROPERTIES_VERSION" "$VERSION_STR"; then
-              # If version in gradle.properties was bumped manually, use it
-              NEW_VERSION="$PROPERTIES_VERSION"
-            else
-              # Otherwise, increment the latest tag
-              NEW_VERSION=$(increment_version "$VERSION_STR")
-            fi
+            VERSION_NUM=$(echo "$LATEST_TAG" | sed 's/v//')
+            VERSION_NUM=$((VERSION_NUM + 1))
           fi
+          
+          VERSION="v$VERSION_NUM"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Calculated version: $VERSION"
 
-          # 6. Ensure the tag does not exist locally or on remote
-          NEW_TAG="v$NEW_VERSION"
-          while git rev-parse -q --verify "refs/tags/$NEW_TAG" >/dev/null || { git ls-remote --tags origin "refs/tags/$NEW_TAG" 2>/dev/null | grep -q "$NEW_TAG"; }; do
-            echo "Tag $NEW_TAG already exists, incrementing..."
-            NEW_VERSION=$(increment_version "$NEW_VERSION")
-            NEW_TAG="v$NEW_VERSION"
-          done
-
-          echo "Calculated Tag: $NEW_TAG"
-          echo "NEW_TAG=$NEW_TAG" >> $GITHUB_ENV
-          echo "RELEASE_VERSION=$NEW_VERSION" >> $GITHUB_ENV
-
-      - name: build
+      - name: Update Version in Source Files
         run: |
-          if [ -n "$RELEASE_VERSION" ]; then
-            echo "Building with release version: $RELEASE_VERSION"
-            ./gradlew build -Pmod_version="$RELEASE_VERSION"
-          else
-            echo "Building with default version"
-            ./gradlew build
+          # Update mod_version in gradle.properties to v1, v2, etc.
+          sed -i "s/mod_version=.*/mod_version=${{ env.VERSION }}/g" gradle.properties
+          
+          # Update version in fabric.mod.json to v1, v2, etc.
+          sed -i 's/"version": "[^"]*"/"version": "'"${{ env.VERSION }}"'"/g' src/main/resources/fabric.mod.json
+          
+          echo "=== Updated gradle.properties ==="
+          grep "mod_version" gradle.properties
+          echo "=== Updated fabric.mod.json ==="
+          grep '"version":' src/main/resources/fabric.mod.json
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build with Gradle
+        run: ./gradlew build
+
+      - name: Rename and Prepare JAR Release
+        run: |
+          # Find the compiled mod jar (ignoring -sources.jar, -dev.jar, etc.)
+          JAR_FILE=$(find build/libs/ -name "*.jar" ! -name "*-sources.jar" ! -name "*-dev.jar" | head -n 1)
+          if [ -z "$JAR_FILE" ]; then
+            echo "Error: Compiled JAR not found!"
+            exit 1
           fi
+          mv "$JAR_FILE" "build/libs/shole-${{ env.VERSION }}.jar"
+          echo "Prepared JAR: build/libs/shole-${{ env.VERSION }}.jar"
 
-      - name: capture build artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: Artifacts
-          path: build/libs/
-
-      - name: create and push tag
-        if: env.NEW_TAG != ''
+      - name: Create and Push Git Tag
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "$NEW_TAG"
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git "$NEW_TAG"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag ${{ env.VERSION }}
+          git push origin ${{ env.VERSION }}
 
-      - name: create github release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
-        if: env.NEW_TAG != ''
         with:
-          tag_name: ${{ env.NEW_TAG }}
-          files: build/libs/*.jar
+          tag_name: ${{ env.VERSION }}
+          name: Release ${{ env.VERSION }}
+          body: |
+            Automated release for Shole version `${{ env.VERSION }}`.
+            
+            ### Changes:
+            - Built from commit: ${{ github.sha }}
+          draft: false
+          prerelease: false
+          files: build/libs/shole-${{ env.VERSION }}.jar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
