@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "example-mymod",
+  "version": "1.0.0",
+  "name": "Example MyMod",
+  "description": "An example mod demonstrating KonfyLib integration.",
+  "authors": [
+    "Your Name"
+  ],
+  "contact": {
+    "homepage": "https://example.com"
+  },
+  "license": "MIT",
+  "icon": "assets/mymod/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "konfy": [
+      "com.example.mymod.config.ExampleModEntrypoint"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.14.0",
+    "minecraft": "~1.20.1",
+    "konfylib": ">=1.0.0"
+  }
+}

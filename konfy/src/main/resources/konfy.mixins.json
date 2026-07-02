@@ -1,0 +1,14 @@
+{
+	"required": true,
+	"package": "main.konfy.lib.core.mixin",
+	"compatibilityLevel": "JAVA_17",
+	"client": [
+		"ScreenAccessor",
+		"MinecraftClientMixin",
+		"GameRendererMixin",
+		"EditBoxAccessor"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	}
+}

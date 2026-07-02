@@ -9,8 +9,4 @@ pluginManagement {
 	}
 }
 
-// Should match your modid
-rootProject.name = 'shole'
-
-include 'konfy'
-project(':konfy').projectDir = file('konfy')
+rootProject.name = 'ad'

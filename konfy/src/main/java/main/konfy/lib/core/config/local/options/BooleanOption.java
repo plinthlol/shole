@@ -1,0 +1,42 @@
+package main.konfy.lib.core.config.local.options;
+
+import java.util.function.Consumer;
+import java.util.function.Supplier;
+import main.konfy.lib.core.config.local.Option;
+import main.konfy.lib.core.config.local.builders.OptionBuilder;
+
+public class BooleanOption extends OptionBuilder<Boolean, BooleanOption> {
+   private BooleanOption.Warning warning;
+
+   public BooleanOption(String name, Supplier<Boolean> getter, boolean defaultValue, Consumer<Boolean> setter) {
+      super(name, getter, defaultValue, setter);
+   }
+
+   public BooleanOption addWarning(BooleanOption.Warning warning) {
+      this.warning = warning;
+      return this;
+   }
+
+   public static BooleanOption createBuilder(String name, Supplier<Boolean> getter, boolean defaultValue, Consumer<Boolean> setter) {
+      return new BooleanOption(name, getter, defaultValue, setter);
+   }
+
+   @Override
+   public Option<Boolean> build() {
+      return new Option<>(
+         this.name,
+         this.description,
+         this.getter,
+         this.setter,
+         this.availability,
+         this.availabilityHelp,
+         Boolean.class,
+         this.defaultValue,
+         this.warning,
+         this.onChange
+      );
+   }
+
+   public record Warning(String title, String message, Runnable onYes, Runnable onNo) {
+   }
+}

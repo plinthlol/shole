@@ -19,6 +19,9 @@
 		],
 		"client": [
 			"com.shole.SholeClient"
+		],
+		"konfy": [
+			"com.shole.config.KonfyIntegration"
 		]
 	},
 	"depends": {

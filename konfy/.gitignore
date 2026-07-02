@@ -1,0 +1,21 @@
+# Gradle caches and build output
+.gradle/
+build/
+
+# Java compile/run files
+*.class
+*.log
+
+# IDE files
+.idea/
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+bin/
+
+# OS files
+.DS_Store
+Thumbs.db

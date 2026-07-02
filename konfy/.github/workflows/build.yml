@@ -1,0 +1,97 @@
+name: Build and Release Mod
+
+on:
+  push:
+  workflow_dispatch: # Allows manual trigger from the Actions tab
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          java-version: '25'
+          distribution: 'temurin'
+
+      - name: Determine Next Version
+        id: get_version
+        run: |
+          # Fetch all tags
+          git fetch --tags --force
+          
+          # Find the latest version tag starting with 'v' followed by a number
+          LATEST_TAG=$(git tag -l "v*" --sort=-v:refname | grep -E '^v[0-9]+$' | head -n 1 || true)
+          
+          if [ -z "$LATEST_TAG" ]; then
+            VERSION_NUM=1
+          else
+            VERSION_NUM=$(echo "$LATEST_TAG" | sed 's/v//')
+            VERSION_NUM=$((VERSION_NUM + 1))
+          fi
+          
+          VERSION="v$VERSION_NUM"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "Calculated version: $VERSION"
+
+      - name: Update Version in Source Files
+        run: |
+          # Update mod_version in gradle.properties to v1, v2, etc.
+          sed -i "s/mod_version=.*/mod_version=${{ env.VERSION }}/g" gradle.properties
+          
+          # Update version in fabric.mod.json to v1, v2, etc.
+          sed -i 's/"version": "[^"]*"/"version": "'"${{ env.VERSION }}"'"/g' src/main/resources/fabric.mod.json
+          
+          echo "=== Updated gradle.properties ==="
+          grep "mod_version" gradle.properties
+          echo "=== Updated fabric.mod.json ==="
+          grep '"version":' src/main/resources/fabric.mod.json
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build with Gradle
+        run: ./gradlew build
+
+      - name: Rename and Prepare JAR Release
+        run: |
+          # Find the compiled mod jar (ignoring -sources.jar, -dev.jar, etc.)
+          JAR_FILE=$(find build/libs/ -name "*.jar" ! -name "*-sources.jar" ! -name "*-dev.jar" | head -n 1)
+          if [ -z "$JAR_FILE" ]; then
+            echo "Error: Compiled JAR not found!"
+            exit 1
+          fi
+          mv "$JAR_FILE" "build/libs/konfy-${{ env.VERSION }}.jar"
+          echo "Prepared JAR: build/libs/konfy-${{ env.VERSION }}.jar"
+
+      - name: Create and Push Git Tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag ${{ env.VERSION }}
+          git push origin ${{ env.VERSION }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.VERSION }}
+          name: Release ${{ env.VERSION }}
+          body: |
+            Automated release for Konfy version `${{ env.VERSION }}`.
+            
+            ### Changes:
+            - Built from commit: ${{ github.sha }}
+          draft: false
+          prerelease: false
+          files: build/libs/konfy-${{ env.VERSION }}.jar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

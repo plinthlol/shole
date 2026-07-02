@@ -1,0 +1,31 @@
+{
+	"schemaVersion": 1,
+	"id": "konfy",
+	"version": "1.0.11+26.1",
+	"name": "Konfy",
+	"description": "A elegant, minimal and versatile config library",
+	"authors": [
+		"plinthlol"
+	],
+	"contact": {
+		"issues": "https://github.com/plinthlol/konfy/issues",
+		"sources": "https://github.com/plinthlol/konfy",
+		"homepage": "https://modrinth.com/mod/konfy"
+	},
+	"license": "MIT",
+	"icon": "assets/konfy/icon.png",
+	"environment": "client",
+	"entrypoints": {
+		"modmenu": [
+			"main.konfy.lib.core.integration.ModMenuIntegration"
+		]
+	},
+	"mixins": [
+		"konfy.mixins.json"
+	],
+	"depends": {
+		"fabricloader": "*",
+		"minecraft": "*",
+		"java": ">=17"
+	}
+}

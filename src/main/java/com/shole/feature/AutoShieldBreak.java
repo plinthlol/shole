@@ -66,10 +66,11 @@ public final class AutoShieldBreak {
             swapTo(client, player, axeSlot);
             client.gameMode.attack(player, target);
             player.swing(hand);
-            // swap back to original sword slot with 8 ticks + random of 1, 2, or 3 ticks
+            // swap back delay = base + random[0..randomRange]
             targetSlot = swordSlot;
-            int offset = java.util.concurrent.ThreadLocalRandom.current().nextInt(1, 4);
-            ticksRemaining = 8 + offset;
+            int range = com.shole.config.SholeConfig.randomRange;
+            int offset = range > 0 ? java.util.concurrent.ThreadLocalRandom.current().nextInt(range + 1) : 0;
+            ticksRemaining = com.shole.config.SholeConfig.swapBackDelay + offset;
         } finally {
             processing = false;
         }
