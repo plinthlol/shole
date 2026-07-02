@@ -31,14 +31,7 @@ public final class JumpCharge {
                 // Pitch of 89-90 degrees (looking straight down)
                 float pitch = player.getXRot();
                 if (pitch >= 89.0f) {
-                    int delay = com.shole.config.SholeConfig.jumpChargeDelay;
-                    if (delay <= 0) {
-                        if (player.onGround()) {
-                            player.jumpFromGround();
-                        }
-                    } else {
-                        ticksRemaining = delay;
-                    }
+                    ticksRemaining = 2;
                 }
             }
 
