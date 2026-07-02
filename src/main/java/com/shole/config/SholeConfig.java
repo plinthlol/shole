@@ -37,6 +37,11 @@ public class SholeConfig {
      */
     public static int jumpRandomRange = 1;
 
+    // ── Jump Charge ───────────────────────────────────────────────────────────
+
+    /** Delay in ticks between right-clicking a wind charge and jumping. */
+    public static int jumpChargeDelay = 1;
+
     // ─────────────────────────────────────────────────────────────────────────
 
     public static ModConfig createConfig() {
@@ -125,8 +130,19 @@ public class SholeConfig {
                 () -> "Automatically jump when throwing a Wind Charge straight down."))
          .build();
 
+        Option<Integer> jcDelay = NumericalOption.createBuilder(
+                "Jump Charge Delay",
+                () -> jumpChargeDelay,
+                1,
+                val -> jumpChargeDelay = val
+        ).values(0, 10, 1)
+         .description(OptionDescription.ofOrderedString(
+                 () -> "Delay in ticks between throwing the wind charge and jumping (usually 1 or 2)."))
+         .build();
+
         OptionGroup jcGroup = OptionGroup.createBuilder("Jump Charge")
                 .addOption(jcToggle)
+                .addOption(jcDelay)
                 .setExpanded(true)
                 .build();
 

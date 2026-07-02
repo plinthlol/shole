@@ -1,6 +1,7 @@
 package com.shole.feature;
 
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
@@ -9,6 +10,7 @@ import net.minecraft.world.item.Items;
 public final class JumpCharge {
 
     private static boolean enabled = true;
+    private static int ticksRemaining = -1;
 
     private JumpCharge() {}
 
@@ -29,13 +31,35 @@ public final class JumpCharge {
                 // Pitch of 89-90 degrees (looking straight down)
                 float pitch = player.getXRot();
                 if (pitch >= 89.0f) {
-                    if (player.onGround()) {
-                        player.jumpFromGround();
+                    int delay = com.shole.config.SholeConfig.jumpChargeDelay;
+                    if (delay <= 0) {
+                        if (player.onGround()) {
+                            player.jumpFromGround();
+                        }
+                    } else {
+                        ticksRemaining = delay;
                     }
                 }
             }
 
             return InteractionResult.PASS;
+        });
+
+        ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            if (client.player == null) {
+                ticksRemaining = -1;
+                return;
+            }
+
+            if (ticksRemaining > 0) {
+                ticksRemaining--;
+                if (ticksRemaining == 0) {
+                    if (client.player.onGround()) {
+                        client.player.jumpFromGround();
+                    }
+                    ticksRemaining = -1;
+                }
+            }
         });
     }
 
