@@ -115,8 +115,23 @@ public class SholeConfig {
                 .setExpanded(true)
                 .build();
 
+        // ── Jump Charge group ────────────────────────────────────────────────
+        Option<Boolean> jcToggle = BooleanOption.createBuilder(
+                "Jump Charge",
+                com.shole.feature.JumpCharge::isEnabled,
+                true,
+                com.shole.feature.JumpCharge::setEnabled
+        ).description(OptionDescription.ofOrderedString(
+                () -> "Automatically jump when throwing a Wind Charge straight down."))
+         .build();
+
+        OptionGroup jcGroup = OptionGroup.createBuilder("Jump Charge")
+                .addOption(jcToggle)
+                .setExpanded(true)
+                .build();
+
         // ── Assemble ─────────────────────────────────────────────────────────
-        Category core = new Category("Core", List.of(asbGroup, ajGroup), List.of());
+        Category core = new Category("Core", List.of(asbGroup, ajGroup, jcGroup), List.of());
 
         return new ModConfig(Paths.get("config/shole.json"), List.of(core), () -> {});
     }

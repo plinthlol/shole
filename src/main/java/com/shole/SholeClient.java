@@ -17,6 +17,7 @@ public final class SholeClient implements ClientModInitializer {
     public void onInitializeClient() {
         AutoShieldBreak.init();
         AutoJump.init();
+        com.shole.feature.JumpCharge.init();
 
         KeyMapping.Category sholeCategory = KeyMapping.Category.register(Shole.id("shole"));
 
@@ -32,6 +33,11 @@ public final class SholeClient implements ClientModInitializer {
 
         KeyMapping jumpKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
                 "key.shole.autojump", InputConstants.Type.KEYSYM, InputConstants.KEY_V,
+                sholeCategory
+        ));
+
+        KeyMapping jumpChargeKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+                "key.shole.jumpcharge", InputConstants.Type.KEYSYM, InputConstants.UNKNOWN.getValue(),
                 sholeCategory
         ));
 
@@ -51,6 +57,15 @@ public final class SholeClient implements ClientModInitializer {
                     client.player.sendOverlayMessage(
                         Component.literal(
                             "Auto Jump: " + (AutoJump.isEnabled() ? "§aON" : "§cOFF")));
+                }
+            }
+
+            while (jumpChargeKey.consumeClick()) {
+                com.shole.feature.JumpCharge.toggle();
+                if (client.player != null) {
+                    client.player.sendOverlayMessage(
+                        Component.literal(
+                            "Jump Charge: " + (com.shole.feature.JumpCharge.isEnabled() ? "§aON" : "§cOFF")));
                 }
             }
 
