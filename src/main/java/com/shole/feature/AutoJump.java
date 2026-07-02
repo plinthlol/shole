@@ -14,7 +14,10 @@ public final class AutoJump {
 
     public static void init() {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            if (client.player == null) return;
+            if (client.player == null) {
+                lastHealth = -1f;
+                return;
+            }
 
             float currentHealth = client.player.getHealth();
 
