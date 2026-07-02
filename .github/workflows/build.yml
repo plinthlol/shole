@@ -72,8 +72,11 @@ jobs:
             echo "Error: Compiled JAR not found!"
             exit 1
           fi
-          mv "$JAR_FILE" "build/libs/shole-${{ env.VERSION }}.jar"
-          echo "Prepared JAR: build/libs/shole-${{ env.VERSION }}.jar"
+          TARGET_FILE="build/libs/shole-${{ env.VERSION }}.jar"
+          if [ "$JAR_FILE" != "$TARGET_FILE" ]; then
+            mv "$JAR_FILE" "$TARGET_FILE"
+          fi
+          echo "Prepared JAR: $TARGET_FILE"
 
       - name: Create and Push Git Tag
         run: |
